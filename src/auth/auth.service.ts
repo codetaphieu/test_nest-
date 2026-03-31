@@ -1,0 +1,116 @@
+import { BadRequestException, ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
+import { LoginDto } from './dto/login.dto';
+import { RegisterDto } from './dto/register.dto';
+import { UsersService } from 'src/users/users.service';
+import * as bcrypt from 'bcrypt';
+import { JwtModule, JwtService } from '@nestjs/jwt';
+import { RefreshTokenDto } from './dto/refresh-token.dto';
+import { ref } from 'process';
+import { LogoutDto } from './dto/logout.dto';
+
+@Injectable()
+export class AuthService {
+
+    constructor(
+        private usersService: UsersService,
+        private jwtService: JwtService
+    ) { }
+
+    async login(dto: LoginDto) {
+        const { email, password } = dto;
+        const user = await this.usersService.findByEmail(email);
+
+        if (!user) {
+            throw new UnauthorizedException('User email does not exist');
+        }
+
+        const isMatch = await bcrypt.compare(password, user.password);
+
+        if (!isMatch) {
+            throw new UnauthorizedException('Password failed');
+        }
+
+        const payload = {
+            email: user.email,
+            userId: user.id,
+            username: user.username
+        }
+
+        const accessToken = this.jwtService.sign(payload);
+        const refreshToken = this.jwtService.sign(payload, { secret: process.env.JWT_REFRESH_SECRET, expiresIn: '7d' });
+        return {
+            accessToken,
+            refreshToken,
+            // exp: Math.floor(Date.now() / 1000) + (60 * 60), // 1 hour
+        };
+    }
+
+    async register(dto: RegisterDto) {
+        const { email, username, password, confirmPassword } = dto;
+        const user = await this.usersService.findByEmail(email);
+        if (user) {
+            throw new ConflictException('User already exists');
+        }
+
+        if (password !== confirmPassword) {
+            throw new BadRequestException('Confirm password do not match');
+        }
+
+        const newUser = await this.usersService.create({ email, username, password });
+        const payload = {
+            email: newUser.email,
+            userId: newUser.id,
+            username: newUser.username
+        }
+        const accessToken = this.jwtService.sign(payload);
+        const refreshToken = this.jwtService.sign(payload, { secret: process.env.JWT_REFRESH_SECRET, expiresIn: '7d' });
+        return {
+            message: "Registration successfully himar!",
+            accessToken: accessToken,
+            refreshToken: refreshToken,
+        };
+    }
+
+    async refresh(dto: RefreshTokenDto) {
+        const { refreshToken } = dto;
+
+        try {
+            const user = await this.jwtService.verify(refreshToken, { secret: process.env.JWT_REFRESH_SECRET });
+            console.log('user:', user);
+            const payload = {
+                userId: user.userId,
+                username: user.username
+            }
+            const accessToken = this.jwtService.sign(payload);
+            const newRefreshToken = this.jwtService.sign(payload, { secret: process.env.JWT_REFRESH_SECRET, expiresIn: '7d' });
+            console.log('access token:', accessToken);
+            console.log('refresh token:', refreshToken);
+            console.log('new refresh token:', newRefreshToken);
+            return {
+                // message: 'Access token refreshed successfully',
+                accessToken: accessToken,
+            };
+        } catch (error) {
+            throw new UnauthorizedException('Invalid refresh token');
+        }
+    }
+
+    async logout(dto: LogoutDto) {
+        const { refreshToken } = dto;
+
+        try {
+            const user = await this.jwtService.verify(refreshToken, { secret: process.env.JWT_REFRESH_SECRET });
+            if (!user) {
+                throw new UnauthorizedException('Invalid refresh token');
+            }
+            
+            console.log('user:', user);
+            console.log('log out ở đây');
+            return {
+                message: 'Logout successful',
+            };
+        } catch (error) {
+            throw new UnauthorizedException('Invalid refresh token');
+        }
+    }
+}
