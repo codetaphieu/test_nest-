@@ -89,6 +89,7 @@ export class AuthService {
             return {
                 // message: 'Access token refreshed successfully',
                 accessToken: accessToken,
+                refreshToken: newRefreshToken,
             };
         } catch (error) {
             throw new UnauthorizedException('Invalid refresh token');
