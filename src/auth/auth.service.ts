@@ -37,7 +37,7 @@ export class AuthService {
         }
 
         const accessToken = this.jwtService.sign(payload);
-        const refreshToken = this.jwtService.sign(payload, { secret: process.env.JWT_REFRESH_SECRET, expiresIn: '7d' });
+        const refreshToken = this.jwtService.sign(payload, { secret: process.env.JWT_REFRESH_SECRET, expiresIn: '9m' });
         return {
             accessToken,
             refreshToken,
@@ -63,7 +63,7 @@ export class AuthService {
             username: newUser.username
         }
         const accessToken = this.jwtService.sign(payload);
-        const refreshToken = this.jwtService.sign(payload, { secret: process.env.JWT_REFRESH_SECRET, expiresIn: '7d' });
+        const refreshToken = this.jwtService.sign(payload, { secret: process.env.JWT_REFRESH_SECRET, expiresIn: '2m' });
         return {
             message: "Registration successfully himar!",
             accessToken: accessToken,
@@ -75,17 +75,27 @@ export class AuthService {
         const { refreshToken } = dto;
 
         try {
-            const user = await this.jwtService.verify(refreshToken, { secret: process.env.JWT_REFRESH_SECRET });
-            console.log('user:', user);
-            const payload = {
-                userId: user.userId,
-                username: user.username
-            }
-            const accessToken = this.jwtService.sign(payload);
-            const newRefreshToken = this.jwtService.sign(payload, { secret: process.env.JWT_REFRESH_SECRET, expiresIn: '7d' });
-            console.log('access token:', accessToken);
-            console.log('refresh token:', refreshToken);
-            console.log('new refresh token:', newRefreshToken);
+        const payloadOld = await this.jwtService.verify(refreshToken, { 
+            secret: process.env.JWT_REFRESH_SECRET 
+        });
+
+        const currentTime = Math.floor(Date.now() / 1000);
+        const timeLeft = payloadOld.exp - currentTime;
+
+        if (timeLeft <= 0) {
+            throw new UnauthorizedException('Refresh token expired');
+        }
+
+        const newPayload = {
+            userId: payloadOld.userId,
+            username: payloadOld.username
+        };
+
+        const accessToken = this.jwtService.sign(newPayload);
+        const newRefreshToken = this.jwtService.sign(newPayload, { 
+            secret: process.env.JWT_REFRESH_SECRET, 
+            expiresIn: timeLeft
+        });
             return {
                 // message: 'Access token refreshed successfully',
                 accessToken: accessToken,
