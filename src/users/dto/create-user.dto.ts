@@ -16,7 +16,7 @@ export class CreateUserDto {
     })
     @IsEmail()
     @IsNotEmpty()
-    email: string;
+    email!: string;
 
     @ApiProperty({
         example: "Hieu",
@@ -24,7 +24,7 @@ export class CreateUserDto {
     })
     @IsString()
     @IsNotEmpty()
-    username: string;
+    username!: string;
 
     @ApiProperty({
         example: "mypassword123",
@@ -33,5 +33,5 @@ export class CreateUserDto {
     @IsString()
     @IsNotEmpty()
     @MinLength(6, { message: "Password is 6 minn himar" })
-    password: string;
+    password!: string;
 }
