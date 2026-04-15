@@ -5,20 +5,28 @@ import { UsersModule } from 'src/users/users.module';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtStrategy } from './jwt.strategy';
+import { JwtRefreshTokenStrategy } from './jwt-refresh.strategy'; 
+
 @Module({
     imports: [
         UsersModule,
-        ConfigModule.forRoot({
-            isGlobal: true,
+        ConfigModule, 
+        JwtModule.registerAsync({
+            imports: [ConfigModule],
+            inject: [ConfigService],
+            useFactory: (configService: ConfigService) => ({
+                secret: configService.get<string>('JWT_SECRET'),
+                // Đổi từ 15s thành 1h để nông dân chơi game ổn định hơn
+                signOptions: { expiresIn: '1h' }, 
+            }),
         }),
-        JwtModule.register({
-            secret: process.env.JWT_SECRET,
-            signOptions: { expiresIn: '15s' },
-        }), 
     ],
     controllers: [AuthController],
-    providers: [AuthService, JwtStrategy],
+    providers: [
+        AuthService, 
+        JwtStrategy, 
+        JwtRefreshTokenStrategy // Phải khai báo ở đây thì Refresh Token mới chạy
+    ],
+    exports : [AuthService, JwtStrategy, JwtRefreshTokenStrategy], // Xuất các provider để GameGateway có thể sử dụng
 })
 export class AuthModule { }
-console.log('secret0:', process.env.JWT_SECRET);
-console.log('secret2:', process.env.JWT_REFRESH_SECRET);

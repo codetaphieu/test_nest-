@@ -4,10 +4,15 @@ import { ExtractJwt, Strategy } from "passport-jwt";
 @Injectable()
 export class JwtRefreshTokenStrategy extends PassportStrategy(Strategy, 'jwt-refresh') {
     constructor() {
+        const jwtRefreshSecret = process.env.JWT_REFRESH_SECRET;
+        if (!jwtRefreshSecret) {
+            throw new Error('JWT_REFRESH_SECRET is not defined');
+        }
+
         super({
             jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
             ignoreExpiration: false,
-            secretOrKey: process.env.JWT_REFRESH_SECRET,
+            secretOrKey: jwtRefreshSecret,
         });
     }
 
