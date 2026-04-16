@@ -3,14 +3,12 @@ import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { UsersService } from 'src/users/users.service';
 import * as bcrypt from 'bcrypt';
-import { JwtModule, JwtService } from '@nestjs/jwt';
+import { JwtService } from '@nestjs/jwt';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
-import { ref } from 'process';
 import { LogoutDto } from './dto/logout.dto';
 
 @Injectable()
 export class AuthService {
-
     constructor(
         private usersService: UsersService,
         private jwtService: JwtService
@@ -21,13 +19,12 @@ export class AuthService {
         const user = await this.usersService.findByEmail(email);
 
         if (!user) {
-            throw new UnauthorizedException('User email does not exist');
+            throw new UnauthorizedException('Tên nông dân này chưa có trong sổ hộ khẩu!');
         }
 
         const isMatch = await bcrypt.compare(password, user.password);
-
         if (!isMatch) {
-            throw new UnauthorizedException('Password failed');
+            throw new UnauthorizedException('Mật khẩu sai rồi bạn ơi!');
         }
 
         const payload = {
@@ -39,23 +36,28 @@ export class AuthService {
         const accessToken = this.jwtService.sign(payload);
         const refreshToken = this.jwtService.sign(payload, { secret: process.env.JWT_REFRESH_SECRET, expiresIn: '7d' });
         return {
-            accessToken,
-            refreshToken,
-            // exp: Math.floor(Date.now() / 1000) + (60 * 60), // 1 hour
+            accessToken: this.jwtService.sign(payload),
+            refreshToken: this.jwtService.sign(payload, { 
+                secret: process.env.JWT_REFRESH_SECRET, 
+                expiresIn: '7d' // Tăng lên 7 ngày cho nông dân đỡ phải login lại nhiều
+            }),
         };
     }
 
     async register(dto: RegisterDto) {
         const { email, username, password, confirmPassword } = dto;
+        
         const user = await this.usersService.findByEmail(email);
         if (user) {
-            throw new ConflictException('User already exists');
+            throw new ConflictException('Email này đã có người đăng ký rồi!');
         }
 
         if (password !== confirmPassword) {
-            throw new BadRequestException('Confirm password do not match');
+            throw new BadRequestException('Mật khẩu xác nhận không khớp!');
         }
 
+        // ĐÂY LÀ NƠI PHÉP MÀU XẢY RA: 
+        // Gọi sang UsersService để nhận 50 vàng và thẻ bài
         const newUser = await this.usersService.create({ email, username, password });
         const payload = {
             email: newUser.email,
@@ -63,7 +65,7 @@ export class AuthService {
             username: newUser.username
         }
         const accessToken = this.jwtService.sign(payload);
-        const refreshToken = this.jwtService.sign(payload, { secret: process.env.JWT_REFRESH_SECRET, expiresIn: '7d' });
+        const refreshToken = this.jwtService.sign(payload, { secret: process.env.JWT_REFRESH_SECRET, expiresIn: '2m' });
         return {
             message: "Registration successfully himar!",
             accessToken: accessToken,
@@ -96,7 +98,6 @@ export class AuthService {
             secret: process.env.JWT_REFRESH_SECRET, 
             expiresIn: timeLeft
         });
-        console.log();
             return {
                 // message: 'Access token refreshed successfully',
                 accessToken: accessToken,

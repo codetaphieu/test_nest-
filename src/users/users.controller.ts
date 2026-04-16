@@ -1,17 +1,17 @@
-import { Controller, Get, Post, Body, UseGuards, Param, Req } from '@nestjs/common';
+import { Controller, Get, Post, Body, UseGuards, Req } from '@nestjs/common';
 import { UsersService } from './users.service';
-import { CreateUserDto } from './dto/cerate-user.dto';
-import { JwtAuthGuard } from 'src/auth/jwt.authgaurd';
-import { ApiBody, ApiOperation } from '@nestjs/swagger';
+import { CreateUserDto } from './dto/create-user.dto'; // Lưu ý: Bạn nên sửa 'cerate' thành 'create'
+import { JwtAuthGuard } from 'src/auth/jwt.auth.guard';
+import { ApiBody, ApiOperation, ApiTags } from '@nestjs/swagger';
 
-
+@ApiTags('users') // Thêm tag để dễ quản lý trong Swagger
 @Controller('users')
 export class UsersController {
 
   constructor(private usersService: UsersService) { }
 
   @Get()
-  @ApiOperation({ summary: 'Get all users' })
+  @ApiOperation({ summary: 'Lấy danh sách tất cả nông dân' })
   @UseGuards(JwtAuthGuard)
   getAll() {
     return this.usersService.findAll();
@@ -27,11 +27,11 @@ export class UsersController {
   }
 
   @Get('oi')
-  @ApiOperation({ summary: 'Get user by ID' })
+  @ApiOperation({ summary: 'Lấy ID của nông dân đang đăng nhập' })
   @UseGuards(JwtAuthGuard)
   getId(@Req() req) {
+    // req.user thường được trả về từ JwtStrategy sau khi xác thực thành công
     return req.user.userId;
   }
 
 }
-

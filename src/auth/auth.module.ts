@@ -5,6 +5,8 @@ import { UsersModule } from 'src/users/users.module';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtStrategy } from './jwt.strategy';
+import { JwtRefreshTokenStrategy } from './jwt-refresh.strategy'; 
+
 @Module({
     imports: [
         UsersModule,
@@ -17,8 +19,11 @@ import { JwtStrategy } from './jwt.strategy';
         }), 
     ],
     controllers: [AuthController],
-    providers: [AuthService, JwtStrategy],
+    providers: [
+        AuthService, 
+        JwtStrategy, 
+        JwtRefreshTokenStrategy // Phải khai báo ở đây thì Refresh Token mới chạy
+    ],
+    exports : [AuthService, JwtStrategy, JwtRefreshTokenStrategy], // Xuất các provider để GameGateway có thể sử dụng
 })
 export class AuthModule { }
-console.log('secret0:', process.env.JWT_SECRET);
-console.log('secret2:', process.env.JWT_REFRESH_SECRET);
