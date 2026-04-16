@@ -8,6 +8,5 @@ export class RefreshTokenDto {
     })
     @IsNotEmpty()
     @IsString()
-    // Thêm ! để báo cho TypeScript là biến này sẽ luôn có giá trị từ request
     refreshToken!: string; 
 }

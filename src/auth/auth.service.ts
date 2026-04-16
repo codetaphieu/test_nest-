@@ -36,11 +36,8 @@ export class AuthService {
         const accessToken = this.jwtService.sign(payload);
         const refreshToken = this.jwtService.sign(payload, { secret: process.env.JWT_REFRESH_SECRET, expiresIn: '7d' });
         return {
-            accessToken: this.jwtService.sign(payload),
-            refreshToken: this.jwtService.sign(payload, { 
-                secret: process.env.JWT_REFRESH_SECRET, 
-                expiresIn: '7d' // Tăng lên 7 ngày cho nông dân đỡ phải login lại nhiều
-            }),
+            accessToken,
+            refreshToken,
         };
     }
 

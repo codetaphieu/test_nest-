@@ -8,6 +8,5 @@ export class LogoutDto {
     })
     @IsString()
     @IsNotEmpty()
-    // Thêm dấu ! vào đây để hết lỗi đỏ
     refreshToken: string; 
 }

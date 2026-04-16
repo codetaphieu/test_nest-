@@ -10,7 +10,7 @@ export class RegisterDto {
     })
     @IsEmail()
     @IsNotEmpty()
-    email!: string;
+    email: string;
 
     @ApiProperty({
         example: "name",
@@ -19,7 +19,7 @@ export class RegisterDto {
     })
     @IsString()
     @IsNotEmpty()
-    username!: string;
+    username: string;
 
     @ApiProperty({
         example: "password123",
@@ -29,7 +29,7 @@ export class RegisterDto {
     @IsString()
     @IsNotEmpty()
     // @MinLength(6, {"message": "Password is too short. Minimum length is 6 characters."})
-    password!: string;
+    password: string;
 
     @ApiProperty({
         example: "password123",

@@ -4,8 +4,8 @@ import { Entity, Column, PrimaryGeneratedColumn } from 'typeorm';
 export class Auth {
 
   @Column({default: 'name'})
-  username!: string;
+  username: string;
 
   @Column({default: 'password123'})
-  password!: string;
+  password: string;
 }

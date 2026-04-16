@@ -22,8 +22,8 @@ import { JwtRefreshTokenStrategy } from './jwt-refresh.strategy';
     providers: [
         AuthService, 
         JwtStrategy, 
-        JwtRefreshTokenStrategy // Phải khai báo ở đây thì Refresh Token mới chạy
+        JwtRefreshTokenStrategy 
     ],
-    exports : [AuthService, JwtStrategy, JwtRefreshTokenStrategy], // Xuất các provider để GameGateway có thể sử dụng
+    exports : [AuthService, JwtStrategy, JwtRefreshTokenStrategy], 
 })
 export class AuthModule { }
