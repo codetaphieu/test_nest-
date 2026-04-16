@@ -4,20 +4,20 @@ import { Entity, Column, PrimaryGeneratedColumn } from 'typeorm';
 export class User {
 
   @PrimaryGeneratedColumn('uuid')
-  id!: string;
+  id: string;
 
   @Column({ default: '', unique: true })
-  email!: string;
+  email: string;
 
   @Column({ default: '', unique: true })
-  username!: string;
+  username: string;
 
   @Column({ default: '' })
-  password!: string;
+  password: string;
 
   @Column({ default: 50 })
-  gold!: number;
+  gold: number;
 
   @Column({ type: 'text', nullable: true })
-  cards!: string;
+  cards: string;
 }
