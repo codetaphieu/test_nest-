@@ -37,7 +37,7 @@ export class AuthService {
         }
 
         const accessToken = this.jwtService.sign(payload);
-        const refreshToken = this.jwtService.sign(payload, { secret: process.env.JWT_REFRESH_SECRET, expiresIn: '9m' });
+        const refreshToken = this.jwtService.sign(payload, { secret: process.env.JWT_REFRESH_SECRET, expiresIn: '7d' });
         return {
             accessToken,
             refreshToken,
@@ -63,7 +63,7 @@ export class AuthService {
             username: newUser.username
         }
         const accessToken = this.jwtService.sign(payload);
-        const refreshToken = this.jwtService.sign(payload, { secret: process.env.JWT_REFRESH_SECRET, expiresIn: '2m' });
+        const refreshToken = this.jwtService.sign(payload, { secret: process.env.JWT_REFRESH_SECRET, expiresIn: '7d' });
         return {
             message: "Registration successfully himar!",
             accessToken: accessToken,
@@ -96,6 +96,7 @@ export class AuthService {
             secret: process.env.JWT_REFRESH_SECRET, 
             expiresIn: timeLeft
         });
+        console.log();
             return {
                 // message: 'Access token refreshed successfully',
                 accessToken: accessToken,
