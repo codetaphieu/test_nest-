@@ -27,8 +27,14 @@ export class AuthService {
             throw new UnauthorizedException('Mật khẩu sai rồi bạn ơi!');
         }
 
-        const payload = { email: user.email, userId: user.id, username: user.username };
+        const payload = {
+            email: user.email,
+            userId: user.id,
+            username: user.username
+        }
 
+        const accessToken = this.jwtService.sign(payload);
+        const refreshToken = this.jwtService.sign(payload, { secret: process.env.JWT_REFRESH_SECRET, expiresIn: '7d' });
         return {
             accessToken: this.jwtService.sign(payload),
             refreshToken: this.jwtService.sign(payload, { 
@@ -53,20 +59,71 @@ export class AuthService {
         // ĐÂY LÀ NƠI PHÉP MÀU XẢY RA: 
         // Gọi sang UsersService để nhận 50 vàng và thẻ bài
         const newUser = await this.usersService.create({ email, username, password });
-
-        const payload = { email: newUser.email, userId: newUser.id, username: newUser.username };
-        
+        const payload = {
+            email: newUser.email,
+            userId: newUser.id,
+            username: newUser.username
+        }
+        const accessToken = this.jwtService.sign(payload);
+        const refreshToken = this.jwtService.sign(payload, { secret: process.env.JWT_REFRESH_SECRET, expiresIn: '2m' });
         return {
-            message: "Đăng ký thành công! Nhận ngay 50 vàng khởi nghiệp nhé!",
-            accessToken: this.jwtService.sign(payload),
-            refreshToken: this.jwtService.sign(payload, { 
-                secret: process.env.JWT_REFRESH_SECRET, 
-                expiresIn: '7d' 
-            }),
+            message: "Registration successfully himar!",
+            accessToken: accessToken,
+            refreshToken: refreshToken,
         };
     }
 
-    // Các hàm Refresh và Logout giữ nguyên như logic bạn đã viết
-    async refresh(dto: RefreshTokenDto) { /* ... giữ nguyên logic xử lý timeLeft ... */ }
-    async logout(dto: LogoutDto) { /* ... giữ nguyên logic verify token ... */ }
+    async refresh(dto: RefreshTokenDto) {
+        const { refreshToken } = dto;
+
+        try {
+        const payloadOld = await this.jwtService.verify(refreshToken, { 
+            secret: process.env.JWT_REFRESH_SECRET 
+        });
+
+        const currentTime = Math.floor(Date.now() / 1000);
+        const timeLeft = payloadOld.exp - currentTime;
+
+        if (timeLeft <= 0) {
+            throw new UnauthorizedException('Refresh token expired');
+        }
+
+        const newPayload = {
+            userId: payloadOld.userId,
+            username: payloadOld.username
+        };
+
+        const accessToken = this.jwtService.sign(newPayload);
+        const newRefreshToken = this.jwtService.sign(newPayload, { 
+            secret: process.env.JWT_REFRESH_SECRET, 
+            expiresIn: timeLeft
+        });
+            return {
+                // message: 'Access token refreshed successfully',
+                accessToken: accessToken,
+                refreshToken: newRefreshToken,
+            };
+        } catch (error) {
+            throw new UnauthorizedException('Invalid refresh token');
+        }
+    }
+
+    async logout(dto: LogoutDto) {
+        const { refreshToken } = dto;
+
+        try {
+            const user = await this.jwtService.verify(refreshToken, { secret: process.env.JWT_REFRESH_SECRET });
+            if (!user) {
+                throw new UnauthorizedException('Invalid refresh token');
+            }
+            
+            console.log('user:', user);
+            console.log('log out ở đây');
+            return {
+                message: 'Logout successful',
+            };
+        } catch (error) {
+            throw new UnauthorizedException('Invalid refresh token');
+        }
+    }
 }

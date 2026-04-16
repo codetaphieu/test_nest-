@@ -10,16 +10,13 @@ import { JwtRefreshTokenStrategy } from './jwt-refresh.strategy';
 @Module({
     imports: [
         UsersModule,
-        ConfigModule, 
-        JwtModule.registerAsync({
-            imports: [ConfigModule],
-            inject: [ConfigService],
-            useFactory: (configService: ConfigService) => ({
-                secret: configService.get<string>('JWT_SECRET'),
-                // Đổi từ 15s thành 1h để nông dân chơi game ổn định hơn
-                signOptions: { expiresIn: '1h' }, 
-            }),
+        ConfigModule.forRoot({
+            isGlobal: true,
         }),
+        JwtModule.register({
+            secret: process.env.JWT_SECRET,
+            signOptions: { expiresIn: '1h' },
+        }), 
     ],
     controllers: [AuthController],
     providers: [

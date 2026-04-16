@@ -7,6 +7,7 @@ import { ApiBody, ApiOperation, ApiTags } from '@nestjs/swagger';
 @ApiTags('users') // Thêm tag để dễ quản lý trong Swagger
 @Controller('users')
 export class UsersController {
+
   constructor(private usersService: UsersService) { }
 
   @Get()
@@ -16,10 +17,11 @@ export class UsersController {
     return this.usersService.findAll();
   }
 
+
   @Post()
-  @ApiOperation({ summary: 'Đăng ký cư dân mới (Khởi nghiệp)' })
+  @ApiOperation({ summary: 'Create a new user' })
   @ApiBody({ type: CreateUserDto })
-  // Mở cổng tự do: Không dùng @UseGuards để nông dân mới có thể đăng ký tài khoản
+  // @UseGuards(JwtAuthGuard)
   create(@Body() createUserDto: CreateUserDto) {
     return this.usersService.create(createUserDto);
   }
@@ -31,4 +33,5 @@ export class UsersController {
     // req.user thường được trả về từ JwtStrategy sau khi xác thực thành công
     return req.user.userId;
   }
+
 }
