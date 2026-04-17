@@ -43,7 +43,7 @@ export class AuthService {
 
     async register(dto: RegisterDto) {
         const { email, username, password, confirmPassword } = dto;
-        
+
         const user = await this.usersService.findByEmail(email);
         if (user) {
             throw new ConflictException('Email này đã có người đăng ký rồi!');
@@ -74,27 +74,28 @@ export class AuthService {
         const { refreshToken } = dto;
 
         try {
-        const payloadOld = await this.jwtService.verify(refreshToken, { 
-            secret: process.env.JWT_REFRESH_SECRET 
-        });
+            const payloadOld = await this.jwtService.verify(refreshToken, {
+                secret: process.env.JWT_REFRESH_SECRET
+            });
 
-        const currentTime = Math.floor(Date.now() / 1000);
-        const timeLeft = payloadOld.exp - currentTime;
+            const currentTime = Math.floor(Date.now() / 1000);
+            const timeLeft = payloadOld.exp - currentTime;
 
-        if (timeLeft <= 0) {
-            throw new UnauthorizedException('Refresh token expired');
-        }
+            if (timeLeft <= 0) {
+                throw new UnauthorizedException('Refresh token expired');
+            }
 
-        const newPayload = {
-            userId: payloadOld.userId,
-            username: payloadOld.username
-        };
+            const newPayload = {
+                userId: payloadOld.userId,
+                username: payloadOld.username
+            };
 
-        const accessToken = this.jwtService.sign(newPayload);
-        const newRefreshToken = this.jwtService.sign(newPayload, { 
-            secret: process.env.JWT_REFRESH_SECRET, 
-            expiresIn: timeLeft
-        });
+            const accessToken = this.jwtService.sign(newPayload);
+            const newRefreshToken = this.jwtService.sign(newPayload, {
+                secret: process.env.JWT_REFRESH_SECRET,
+                expiresIn: timeLeft
+            });
+
             return {
                 // message: 'Access token refreshed successfully',
                 accessToken: accessToken,
@@ -113,7 +114,7 @@ export class AuthService {
             if (!user) {
                 throw new UnauthorizedException('Invalid refresh token');
             }
-            
+
             console.log('user:', user);
             console.log('log out ở đây');
             return {
