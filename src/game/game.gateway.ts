@@ -1,6 +1,6 @@
-import { 
-  WebSocketGateway, 
-  SubscribeMessage, 
+import {
+  WebSocketGateway,
+  SubscribeMessage,
   WebSocketServer,
   OnGatewayConnection
 } from '@nestjs/websockets';
@@ -8,7 +8,7 @@ import { Server, Socket } from 'socket.io';
 import { Inject } from '@nestjs/common';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Cache } from '@nestjs/cache-manager';
-import { JwtService } from '@nestjs/jwt'; 
+import { JwtService } from '@nestjs/jwt';
 import { UsersService } from '../users/users.service';
 
 const RECIPES = [
@@ -22,11 +22,11 @@ const RECIPES = [
 
 @WebSocketGateway({
   cors: {
-    origin: 'http://localhost:3000', 
+    origin: 'http://localhost:3000',
     methods: ['GET', 'POST'],
     credentials: true,
   },
-  transports: ['websocket', 'polling'], 
+  transports: ['websocket', 'polling'],
 })
 export class GameGateway implements OnGatewayConnection {
   @WebSocketServer()
@@ -34,9 +34,9 @@ export class GameGateway implements OnGatewayConnection {
 
   constructor(
     @Inject(CACHE_MANAGER) private cacheManager: Cache,
-    private jwtService: JwtService, 
-    private usersService: UsersService 
-  ) {}
+    private jwtService: JwtService,
+    private usersService: UsersService
+  ) { }
 
   async handleConnection(client: Socket) {
     try {
@@ -48,7 +48,7 @@ export class GameGateway implements OnGatewayConnection {
       }
 
       const payload = this.jwtService.verify(token);
-      const userId = payload.sub?.toString() || payload.id?.toString(); 
+      const userId = payload.sub?.toString() || payload.id?.toString();
       client.join(userId);
 
       const rawData = await this.cacheManager.get(`save_game:${userId}`);
@@ -80,9 +80,9 @@ export class GameGateway implements OnGatewayConnection {
       client.disconnect();
     }
   }
-
+// Hàm kiểm tra va chạm giữa 2 thẻ bài
   private checkCollision(posA: any, posB: any): boolean {
-    const W = 110; 
+    const W = 110;
     const H = 150;
     return (
       posA.x < posB.x + W &&
@@ -91,7 +91,7 @@ export class GameGateway implements OnGatewayConnection {
       posA.y + H > posB.y
     );
   }
-
+  // --- XỬ LÝ KHI DI CHUYỂN THẺ BÀI --- //
   @SubscribeMessage('move_card')
   handleMoveCard(client: Socket, data: any) {
     const token = client.handshake.auth.token;
@@ -113,7 +113,7 @@ export class GameGateway implements OnGatewayConnection {
 
       let game = typeof rawData === 'string' ? JSON.parse(rawData) : rawData;
       const movedCard = game.cards.find((c: any) => c.id === cardId);
-      
+
       if (movedCard) {
         movedCard.position = { x, y };
 
@@ -121,7 +121,7 @@ export class GameGateway implements OnGatewayConnection {
           if (targetCard.id === cardId) continue;
           if (this.checkCollision(movedCard.position, targetCard.position)) {
             this.processRecipe(userId, movedCard, targetCard);
-            break; 
+            break;
           }
         }
       }
@@ -134,10 +134,10 @@ export class GameGateway implements OnGatewayConnection {
   }
 
   private async processRecipe(userId: string, cardA: any, cardB: any) {
-    const recipe = RECIPES.find(r => 
-      r.ingredients.includes(cardA.type) && 
+    const recipe = RECIPES.find(r =>
+      r.ingredients.includes(cardA.type) &&
       r.ingredients.includes(cardB.type) &&
-      r.names.includes(cardA.name) && 
+      r.names.includes(cardA.name) &&
       r.names.includes(cardB.name)
     );
 

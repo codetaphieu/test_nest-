@@ -40,7 +40,7 @@ export class GameController {
       // 5. Nếu chưa có dữ liệu (Người chơi mới), trả về bộ thẻ khởi tạo mặc định
       // Việc này giúp tránh lỗi "màn hình xanh" ở Frontend khi user mới vào lần đầu
       const defaultState = {
-        gold: 100,
+        gold: 10,
         cards: [
           { id: 1, name: 'Nông dân', type: 'person', x: 100, y: 100 },
           { id: 2, name: 'Bụi chuối', type: 'resource', x: 250, y: 100 }
