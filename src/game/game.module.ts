@@ -8,20 +8,16 @@ import { AuthModule } from '../auth/auth.module'; //
 
 @Module({
   imports: [
-    UsersModule,
-    AuthModule, 
-    ConfigModule, // Khai báo ConfigModule
+    ConfigModule,
     
-    // Đổi từ register sang registerAsync để đồng bộ 100% với AuthModule
-    JwtModule.registerAsync({
-      imports: [ConfigModule],
-      inject: [ConfigService],
-      useFactory: (configService: ConfigService) => ({
-        secret: configService.get<string>('JWT_SECRET'),
-      }),
-    }),
+    // JwtModule.registerAsync({
+    //   imports: [ConfigModule],
+    //   inject: [ConfigService],
+    //   useFactory: (configService: ConfigService) => ({
+    //     secret: configService.get<string>('JWT_SECRET'),
+    //   }),
+    // }),
     
-    // Đăng ký CacheModule
     CacheModule.register({
       ttl: 0,
       max: 100, 
