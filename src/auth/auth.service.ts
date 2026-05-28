@@ -52,9 +52,7 @@ export class AuthService {
         if (password !== confirmPassword) {
             throw new BadRequestException('Mật khẩu xác nhận không khớp!');
         }
-
-        // ĐÂY LÀ NƠI PHÉP MÀU XẢY RA: 
-        // Gọi sang UsersService để nhận 50 vàng và thẻ bài
+        
         const newUser = await this.usersService.create({ email, username, password });
         const payload = {
             email: newUser.email,
@@ -62,7 +60,7 @@ export class AuthService {
             username: newUser.username
         }
         const accessToken = this.jwtService.sign(payload);
-        const refreshToken = this.jwtService.sign(payload, { secret: process.env.JWT_REFRESH_SECRET, expiresIn: '2m' });
+        const refreshToken = this.jwtService.sign(payload, { secret: process.env.JWT_REFRESH_SECRET, expiresIn: '7d' });
         return {
             message: "Registration successfully himar!",
             accessToken: accessToken,

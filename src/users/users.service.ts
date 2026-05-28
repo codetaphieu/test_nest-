@@ -29,44 +29,39 @@ export class UsersService {
 
   // Logic "Khởi nghiệp": Tặng 50 vàng và thẻ bài đầu tiên
   async create(createUserDto: CreateUserDto): Promise<User> {
+    const newUser = await this.findByEmail(createUserDto.email);
+    if (newUser) {
+      throw new Error('Email đã tồn tại');
+    }
     createUserDto.password = await bcrypt.hash(createUserDto.password, 10);
-
-    // Cấp vốn ban đầu với cấu trúc position đồng bộ với Frontend
-    const initialCards = [
-      { id: Date.now(), name: 'Nông dân', type: 'person', position: { x: 150, y: 200 } },
-      { id: Date.now() + 1, name: 'Bụi chuối', type: 'resource', position: { x: 300, y: 200 } },
-    ];
 
     const user = this.userRepository.create({
       ...createUserDto,
-      gold: 50,
-      cards: JSON.stringify(initialCards),
     });
-
     return this.userRepository.save(user);
   }
 
   // Cập nhật vị trí thẻ bài
-  async updateCardPosition(userId: string, cardId: number, newX: number, newY: number) {
-    const user = await this.userRepository.findOne({ where: { id: userId } });
-    if (!user || !user.cards) return;
+  // async updateCardPosition(userId: string, cardId: number, newX: number, newY: number) {
+  //   const user = await this.userRepository.findOne({ where: { id: userId } });
+  //   if (!user || !user.cards) return;
 
-    let cards = typeof user.cards === 'string' ? JSON.parse(user.cards) : user.cards;
-    const cardIndex = cards.findIndex((c: any) => c.id === cardId);
+  //   let cards = typeof user.cards === 'string' ? JSON.parse(user.cards) : user.cards;
+  //   const cardIndex = cards.findIndex((c: any) => c.id === cardId);
 
-    if (cardIndex !== -1) {
-      cards[cardIndex].position = { x: newX, y: newY };
-      user.cards = JSON.stringify(cards);
-      await this.userRepository.save(user);
-    }
-  }
+  //   if (cardIndex !== -1) {
+  //     cards[cardIndex].position = { x: newX, y: newY };
+  //     user.cards = JSON.stringify(cards);
+  //     await this.userRepository.save(user);
+  //   }
+  // }
 
-  // Lưu lại trạng thái toàn bộ ngôi làng
-  async saveVillageState(userId: string, currentCards: any[]) {
-    const user = await this.userRepository.findOne({ where: { id: userId } });
-    if (user) {
-      user.cards = JSON.stringify(currentCards);
-      await this.userRepository.save(user);
-    }
-  }
+  // // Lưu lại trạng thái toàn bộ ngôi làng
+  // async saveVillageState(userId: string, currentCards: any[]) {
+  //   const user = await this.userRepository.findOne({ where: { id: userId } });
+  //   if (user) {
+  //     user.cards = JSON.stringify(currentCards);
+  //     await this.userRepository.save(user);
+  //   }
+  // }
 }
