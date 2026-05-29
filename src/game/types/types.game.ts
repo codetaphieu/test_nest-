@@ -122,6 +122,7 @@ export interface Pack {
     description: string;
     cost: number;
     numberOfItems: number; // số lượng item trong pack
+    unlockQuestCount?: number;
     items: PackItem[];
     position?: { x: number; y: number };
 }

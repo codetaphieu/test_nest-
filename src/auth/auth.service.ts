@@ -6,12 +6,23 @@ import * as bcrypt from 'bcrypt';
 import { JwtService } from '@nestjs/jwt';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { LogoutDto } from './dto/logout.dto';
+import { RefreshTokenStoreService } from './refresh-token-store.service';
+
+type RefreshTokenPayload = {
+    email: string;
+    userId: string;
+    username: string;
+    exp: number;
+};
 
 @Injectable()
 export class AuthService {
+    private readonly refreshTokenTtlSeconds = 7 * 24 * 60 * 60;
+
     constructor(
         private usersService: UsersService,
-        private jwtService: JwtService
+        private jwtService: JwtService,
+        private refreshTokenStore: RefreshTokenStoreService,
     ) { }
 
     async login(dto: LoginDto) {
@@ -35,6 +46,8 @@ export class AuthService {
 
         const accessToken = this.jwtService.sign(payload);
         const refreshToken = this.jwtService.sign(payload, { secret: process.env.JWT_REFRESH_SECRET, expiresIn: '7d' });
+        await this.refreshTokenStore.store(refreshToken, user.id, this.refreshTokenTtlSeconds);
+
         return {
             accessToken,
             refreshToken,
@@ -61,6 +74,8 @@ export class AuthService {
         }
         const accessToken = this.jwtService.sign(payload);
         const refreshToken = this.jwtService.sign(payload, { secret: process.env.JWT_REFRESH_SECRET, expiresIn: '7d' });
+        await this.refreshTokenStore.store(refreshToken, newUser.id, this.refreshTokenTtlSeconds);
+
         return {
             message: "Registration successfully himar!",
             accessToken: accessToken,
@@ -72,9 +87,14 @@ export class AuthService {
         const { refreshToken } = dto;
 
         try {
-        const payloadOld = await this.jwtService.verify(refreshToken, { 
+        const payloadOld = await this.jwtService.verify<RefreshTokenPayload>(refreshToken, { 
             secret: process.env.JWT_REFRESH_SECRET 
         });
+
+        const isStoredToken = await this.refreshTokenStore.exists(refreshToken);
+        if (!isStoredToken) {
+            throw new UnauthorizedException('Refresh token revoked');
+        }
 
         const currentTime = Math.floor(Date.now() / 1000);
         const timeLeft = payloadOld.exp - currentTime;
@@ -84,6 +104,7 @@ export class AuthService {
         }
 
         const newPayload = {
+            email: payloadOld.email,
             userId: payloadOld.userId,
             username: payloadOld.username
         };
@@ -93,6 +114,9 @@ export class AuthService {
             secret: process.env.JWT_REFRESH_SECRET, 
             expiresIn: timeLeft
         });
+            await this.refreshTokenStore.revoke(refreshToken);
+            await this.refreshTokenStore.store(newRefreshToken, payloadOld.userId, timeLeft);
+
             return {
                 // message: 'Access token refreshed successfully',
                 accessToken: accessToken,
@@ -105,19 +129,21 @@ export class AuthService {
 
     async logout(dto: LogoutDto) {
         const { refreshToken } = dto;
+        console.log('[AuthService] logout called');
 
         try {
             const user = await this.jwtService.verify(refreshToken, { secret: process.env.JWT_REFRESH_SECRET });
             if (!user) {
                 throw new UnauthorizedException('Invalid refresh token');
             }
-            
-            console.log('user:', user);
-            console.log('log out ở đây');
+
+            await this.refreshTokenStore.revoke(refreshToken);
+            console.log(`[AuthService] user ${user.userId} logged out`);
             return {
                 message: 'Logout successful',
             };
         } catch (error) {
+            console.log('[AuthService] logout failed: invalid refresh token');
             throw new UnauthorizedException('Invalid refresh token');
         }
     }

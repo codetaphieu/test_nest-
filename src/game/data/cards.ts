@@ -12,6 +12,15 @@ export const CARDS: Record<string, CardDef> = {
         type: "Structure",
         sellValue: 0,
     },
+    tree: {
+        id: "tree",
+        name: "Cây",
+        type: "Structure",
+        sellValue: 1,
+        stats: {
+            description: "Một cây có thể thu hoạch để lấy gỗ.",
+        },
+    },
     berry_bush: {
         id: "berry_bush",
         name: "bụi quả mọng",

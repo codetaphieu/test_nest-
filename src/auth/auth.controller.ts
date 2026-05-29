@@ -36,6 +36,7 @@ export class AuthController {
   @ApiOperation({ summary: 'Đăng xuất' })
   @ApiBody({ type: LogoutDto })
   logout(@Body() dto: LogoutDto) {
+    console.log('[AuthController] POST /auth/logout received');
     return this.authService.logout(dto);
   }
 }

@@ -1,6 +1,7 @@
 import { Injectable } from "@nestjs/common";
 import { randomUUID } from "crypto";
-import { CARD_HEIGHT, CARD_WIDTH } from "./data/cards";
+import { CARD_HEIGHT, CARD_WIDTH, CARDS } from "./data/cards";
+import { PACKS } from "./data/packs";
 import { CraftingEngine } from "./engine/crafting.engine";
 import { GameStateService } from "./gameState.service";
 import {
@@ -11,7 +12,7 @@ import {
     RecipeCompletedPayload,
 } from "./types/types.game";
 
-type Broadcaster = (event: string, data: unknown) => void;
+type Broadcaster = (event: string, data: unknown, roomId?: string) => void;
 type Position = { x: number; y: number };
 
 const STACK_CARD_OFFSET_Y = 24;
@@ -37,10 +38,109 @@ export class GameService {
         this.broadcaster = broadcaster;
     }
 
-    dropCardOnCard(draggingCardId: string, targetCardId: string, dropPosition?: Position): GameSocketEvent[] {
-        const state = this.gameState.getState();
-        const draggingCard = this.detachWorldCard(draggingCardId);
-        const targetCard = this.detachWorldCard(targetCardId);
+    resumeCraftingTimers(roomId: string) {
+        const state = this.gameState.getState(roomId);
+
+        for (const stack of Object.values(state.stacks)) {
+            if (!stack.crafting.active || !stack.crafting.recipeId || !stack.crafting.startAt || !stack.crafting.duration) {
+                continue;
+            }
+
+            const recipe = this.craftingEngine.findRecipeById(stack.crafting.recipeId);
+            if (!recipe) {
+                stack.crafting = { active: false };
+                stack.progress = 0;
+                continue;
+            }
+
+            const elapsed = Date.now() - stack.crafting.startAt;
+            const remaining = stack.crafting.duration - elapsed;
+
+            if (remaining <= 0) {
+                setTimeout(() => {
+                    this.completeRecipe(stack.stackId, recipe.id, roomId);
+                }, 0);
+                continue;
+            }
+
+            this.setRecipeTimer(stack, recipe, roomId, remaining);
+        }
+    }
+
+    buyPack(packId: string, position?: Position, roomId?: string): GameSocketEvent[] {
+        const state = this.gameState.getState(roomId);
+        const pack = PACKS[packId];
+
+        if (!pack) {
+            return [this.errorEvent("pack_not_found", "Pack does not exist")];
+        }
+
+        if (state.coins < pack.cost) {
+            return [this.errorEvent("not_enough_coins", "Not enough coins to buy this pack")];
+        }
+
+        const currentCardCount = Object.keys(state.cards).length + Object.values(state.stacks)
+            .reduce((total, stack) => total + stack.cards.length, 0);
+        if (currentCardCount + pack.numberOfItems > state.cardLimit) {
+            return [this.errorEvent("card_limit_reached", "Not enough card capacity to open this pack")];
+        }
+
+        state.coins -= pack.cost;
+
+        const spawnedCards = Array.from({ length: pack.numberOfItems }, (_, index) => {
+            const card = this.createCardInstance(
+                this.rollPackCard(packId),
+                this.getPackSpawnPosition(position ?? { x: 240, y: 220 }, index),
+            );
+            state.cards[card.instanceId] = card;
+            return this.snapshotCard(card);
+        });
+
+        return [
+            {
+                event: "economy_updated",
+                data: { coins: state.coins },
+            },
+            {
+                event: "cards_spawned",
+                data: { cards: spawnedCards },
+            },
+        ];
+    }
+
+    sellCard(instanceId: string, roomId?: string): GameSocketEvent[] {
+        const state = this.gameState.getState(roomId);
+        const card = state.cards[instanceId];
+
+        if (!card) {
+            return [this.errorEvent("card_not_found", "Card does not exist in world cards")];
+        }
+
+        const cardDef = CARDS[card.defId];
+        const sellValue = card.defId === "coin" ? 1 : cardDef?.sellValue;
+        if (!cardDef || sellValue === undefined || sellValue <= 0) {
+            return [this.errorEvent("card_cannot_be_sold", "This card cannot be sold")];
+        }
+
+        delete state.cards[instanceId];
+        state.coins += sellValue;
+
+        return [
+            {
+                event: "card_removed",
+                data: { instanceId },
+            },
+            {
+                event: "economy_updated",
+                data: { coins: state.coins },
+            },
+        ];
+    }
+
+    dropCardOnCard(draggingCardId: string, targetCardId: string, dropPosition?: Position, roomId?: string): GameSocketEvent[] {
+        const state = this.gameState.getState(roomId);
+        const draggingCard = this.detachWorldCard(draggingCardId, roomId);
+        const targetCard = this.detachWorldCard(targetCardId, roomId);
 
         if (!draggingCard || !targetCard || draggingCardId === targetCardId) {
             if (draggingCard) {
@@ -55,11 +155,11 @@ export class GameService {
         const stack = this.createNewStack(draggingCard, targetCard, dropPosition);
         state.stacks[stack.stackId] = stack;
 
-        return this.evaluateStackAfterMutation(stack);
+        return this.evaluateStackAfterMutation(stack, roomId);
     }
 
-    dropCardOnStack(draggingCardId: string, targetStackId: string, dropPosition?: Position): GameSocketEvent[] {
-        const state = this.gameState.getState();
+    dropCardOnStack(draggingCardId: string, targetStackId: string, dropPosition?: Position, roomId?: string): GameSocketEvent[] {
+        const state = this.gameState.getState(roomId);
         const stack = state.stacks[targetStackId];
         const draggingCard = state.cards[draggingCardId];
 
@@ -76,15 +176,15 @@ export class GameService {
         this.applyDropPosition(stack, dropPosition);
         this.normalizeStack(stack);
 
-        return this.evaluateStackAfterMutation(stack);
+        return this.evaluateStackAfterMutation(stack, roomId);
     }
 
-    updateCardPosition(instanceId: string, x: number, y: number): GameSocketEvent[] {
-        return this.dropCardOnEmpty(instanceId, x, y);
+    updateCardPosition(instanceId: string, x: number, y: number, roomId?: string): GameSocketEvent[] {
+        return this.dropCardOnEmpty(instanceId, x, y, roomId);
     }
 
-    dropCardOnEmpty(instanceId: string, x: number, y: number): GameSocketEvent[] {
-        const state = this.gameState.getState();
+    dropCardOnEmpty(instanceId: string, x: number, y: number, roomId?: string): GameSocketEvent[] {
+        const state = this.gameState.getState(roomId);
         const card = state.cards[instanceId];
 
         if (!card) {
@@ -99,12 +199,12 @@ export class GameService {
         }];
     }
 
-    updateStackPosition(stackId: string, x: number, y: number): GameSocketEvent[] {
-        return this.dropStackOnEmpty(stackId, x, y);
+    updateStackPosition(stackId: string, x: number, y: number, roomId?: string): GameSocketEvent[] {
+        return this.dropStackOnEmpty(stackId, x, y, roomId);
     }
 
-    dropStackOnEmpty(stackId: string, x: number, y: number): GameSocketEvent[] {
-        const stack = this.gameState.getState().stacks[stackId];
+    dropStackOnEmpty(stackId: string, x: number, y: number, roomId?: string): GameSocketEvent[] {
+        const stack = this.gameState.getState(roomId).stacks[stackId];
 
         if (!stack) {
             return [this.errorEvent("stack_not_found", "Stack does not exist")];
@@ -119,8 +219,8 @@ export class GameService {
         }];
     }
 
-    dropStackOnCard(draggingStackId: string, targetCardId: string, dropPosition?: Position): GameSocketEvent[] {
-        const state = this.gameState.getState();
+    dropStackOnCard(draggingStackId: string, targetCardId: string, dropPosition?: Position, roomId?: string): GameSocketEvent[] {
+        const state = this.gameState.getState(roomId);
         const stack = state.stacks[draggingStackId];
         const targetCard = state.cards[targetCardId];
 
@@ -137,11 +237,11 @@ export class GameService {
         stack.position = { ...(dropPosition ?? targetCard.position) };
         this.normalizeStack(stack);
 
-        return this.evaluateStackAfterMutation(stack);
+        return this.evaluateStackAfterMutation(stack, roomId);
     }
 
-    dropStackOnStack(draggingStackId: string, targetStackId: string, dropPosition?: Position): GameSocketEvent[] {
-        const state = this.gameState.getState();
+    dropStackOnStack(draggingStackId: string, targetStackId: string, dropPosition?: Position, roomId?: string): GameSocketEvent[] {
+        const state = this.gameState.getState(roomId);
         const draggingStack = state.stacks[draggingStackId];
         const targetStack = state.stacks[targetStackId];
 
@@ -153,7 +253,7 @@ export class GameService {
             return [this.errorEvent("stack_is_crafting", "Cannot merge active crafting stacks")];
         }
 
-        this.clearCraftingTimer(draggingStackId);
+        this.clearCraftingTimer(draggingStackId, roomId);
         delete state.stacks[draggingStackId];
 
         targetStack.cards.push(...draggingStack.cards);
@@ -165,12 +265,12 @@ export class GameService {
                 event: "stack_removed",
                 data: { stackId: draggingStackId },
             },
-            ...this.evaluateStackAfterMutation(targetStack),
+            ...this.evaluateStackAfterMutation(targetStack, roomId),
         ];
     }
 
-    splitCardFromStack(stackId: string, cardId: string, x: number, y: number): GameSocketEvent[] {
-        const state = this.gameState.getState();
+    splitCardFromStack(stackId: string, cardId: string, x: number, y: number, roomId?: string): GameSocketEvent[] {
+        const state = this.gameState.getState(roomId);
         const stack = state.stacks[stackId];
 
         if (!stack) {
@@ -182,7 +282,7 @@ export class GameService {
             return [this.errorEvent("card_not_found", "Card does not exist in stack")];
         }
 
-        this.cancelStackCrafting(stack);
+        this.cancelStackCrafting(stack, roomId);
 
         const [detachedCard] = stack.cards.splice(cardIndex, 1);
         detachedCard.position = { x, y };
@@ -191,7 +291,7 @@ export class GameService {
         const splitPayload = this.createSplitPayload();
         splitPayload.spawnedCards.push(this.snapshotCard(detachedCard));
 
-        const events = this.finishSourceStackAfterSplit(stack, splitPayload);
+        const events = this.finishSourceStackAfterSplit(stack, splitPayload, roomId);
 
         return [
             {
@@ -202,8 +302,8 @@ export class GameService {
         ];
     }
 
-    splitSubStackFromCard(stackId: string, cardId: string, x: number, y: number): GameSocketEvent[] {
-        const state = this.gameState.getState();
+    splitSubStackFromCard(stackId: string, cardId: string, x: number, y: number, roomId?: string): GameSocketEvent[] {
+        const state = this.gameState.getState(roomId);
         const sourceStack = state.stacks[stackId];
 
         if (!sourceStack) {
@@ -216,14 +316,14 @@ export class GameService {
         }
 
         if (splitIndex === 0) {
-            return this.dropStackOnEmpty(stackId, x, y);
+            return this.dropStackOnEmpty(stackId, x, y, roomId);
         }
 
         if (splitIndex === sourceStack.cards.length - 1) {
-            return this.splitCardFromStack(stackId, cardId, x, y);
+            return this.splitCardFromStack(stackId, cardId, x, y, roomId);
         }
 
-        this.cancelStackCrafting(sourceStack);
+        this.cancelStackCrafting(sourceStack, roomId);
 
         const newStackCards = sourceStack.cards.splice(splitIndex);
         const newStack = this.createStackFromCards(newStackCards, { x, y });
@@ -239,8 +339,8 @@ export class GameService {
                 event: "stack_split",
                 data: splitPayload,
             },
-            ...this.evaluateStackAfterMutation(sourceStack),
-            ...this.evaluateStackAfterMutation(newStack),
+            ...this.evaluateStackAfterMutation(sourceStack, roomId),
+            ...this.evaluateStackAfterMutation(newStack, roomId),
         ];
     }
 
@@ -265,7 +365,7 @@ export class GameService {
         }) ?? null
     }
 
-    private evaluateStackAfterMutation(stack: CardStack): GameSocketEvent[] {
+    private evaluateStackAfterMutation(stack: CardStack, roomId?: string): GameSocketEvent[] {
         const recipe = this.craftingEngine.activeRecipe(stack);
 
         if (!recipe) {
@@ -276,7 +376,7 @@ export class GameService {
             }];
         }
 
-        this.startRecipe(stack, recipe);
+        this.startRecipe(stack, recipe, roomId);
 
         return [{
             event: "recipe_started",
@@ -290,8 +390,8 @@ export class GameService {
         }];
     }
 
-    private startRecipe(stack: CardStack, recipe: Recipe) {
-        this.clearCraftingTimer(stack.stackId);
+    private startRecipe(stack: CardStack, recipe: Recipe, roomId?: string) {
+        this.clearCraftingTimer(stack.stackId, roomId);
 
         stack.crafting = {
             active: true,
@@ -301,17 +401,13 @@ export class GameService {
         };
         stack.progress = 0;
 
-        const timer = setTimeout(() => {
-            this.completeRecipe(stack.stackId, recipe.id);
-        }, recipe.duration);
-
-        this.craftingTimers.set(stack.stackId, timer);
+        this.setRecipeTimer(stack, recipe, roomId, recipe.duration);
     }
 
-    private completeRecipe(stackId: string, recipeId: string) {
-        this.craftingTimers.delete(stackId);
+    private completeRecipe(stackId: string, recipeId: string, roomId?: string) {
+        this.craftingTimers.delete(this.timerKey(stackId, roomId));
 
-        const state = this.gameState.getState();
+        const state = this.gameState.getState(roomId);
         const stack = state.stacks[stackId];
         const recipe = this.craftingEngine.findRecipeById(recipeId);
 
@@ -325,7 +421,7 @@ export class GameService {
             return;
         }
 
-        const completion = this.resolveRecipe(stack, recipe);
+        const completion = this.resolveRecipe(stack, recipe, roomId);
         const events: GameSocketEvent[] = [{
             event: "recipe_completed",
             data: completion,
@@ -334,15 +430,16 @@ export class GameService {
         for (const updatedStack of completion.updatedStacks) {
             const liveStack = state.stacks[updatedStack.stackId];
             if (liveStack) {
-                events.push(...this.evaluateStackAfterMutation(liveStack));
+                events.push(...this.evaluateStackAfterMutation(liveStack, roomId));
             }
         }
 
-        this.emitEvents(events);
+        void this.gameState.persistState(roomId);
+        this.emitEvents(events, roomId);
     }
 
-    private resolveRecipe(stack: CardStack, recipe: Recipe): RecipeCompletedPayload {
-        const state = this.gameState.getState();
+    private resolveRecipe(stack: CardStack, recipe: Recipe, roomId?: string): RecipeCompletedPayload {
+        const state = this.gameState.getState(roomId);
         const deletedCardIds = new Set<string>();
         const consumedIndexes = new Set<number>();
 
@@ -370,7 +467,7 @@ export class GameService {
         const removedStackIds: string[] = [];
 
         if (remainingCards.length === 0) {
-            this.clearCraftingTimer(stack.stackId);
+            this.clearCraftingTimer(stack.stackId, roomId);
             delete state.stacks[stack.stackId];
             removedStackIds.push(stack.stackId);
         } else {
@@ -430,8 +527,30 @@ export class GameService {
         };
     }
 
-    private detachWorldCard(instanceId: string): CardInstance | null {
-        const state = this.gameState.getState();
+    private getPackSpawnPosition(position: Position, index: number) {
+        return {
+            x: position.x + (index * 28),
+            y: position.y + (index * 28),
+        };
+    }
+
+    private rollPackCard(packId: string) {
+        const pack = PACKS[packId];
+        const rand = Math.random();
+        let acc = 0;
+
+        for (const item of pack.items) {
+            acc += item.chance;
+            if (rand <= acc) {
+                return item.defId;
+            }
+        }
+
+        return pack.items[0].defId;
+    }
+
+    private detachWorldCard(instanceId: string, roomId?: string): CardInstance | null {
+        const state = this.gameState.getState(roomId);
         const card = state.cards[instanceId];
         if (!card) {
             return null;
@@ -445,8 +564,8 @@ export class GameService {
         return !stack.crafting.active;
     }
 
-    private cancelStackCrafting(stack: CardStack) {
-        this.clearCraftingTimer(stack.stackId);
+    private cancelStackCrafting(stack: CardStack, roomId?: string) {
+        this.clearCraftingTimer(stack.stackId, roomId);
         stack.crafting = { active: false };
         stack.progress = 0;
     }
@@ -468,8 +587,8 @@ export class GameService {
         };
     }
 
-    private finishSourceStackAfterSplit(stack: CardStack, splitPayload: StackSplitPayload): GameSocketEvent[] {
-        const state = this.gameState.getState();
+    private finishSourceStackAfterSplit(stack: CardStack, splitPayload: StackSplitPayload, roomId?: string): GameSocketEvent[] {
+        const state = this.gameState.getState(roomId);
 
         if (stack.cards.length === 0) {
             delete state.stacks[stack.stackId];
@@ -482,7 +601,7 @@ export class GameService {
 
         this.normalizeStack(stack);
         splitPayload.updatedStacks.push(this.snapshotStack(stack));
-        return this.evaluateStackAfterMutation(stack);
+        return this.evaluateStackAfterMutation(stack, roomId);
     }
 
     private normalizeStack(stack: CardStack) {
@@ -511,18 +630,33 @@ export class GameService {
         };
     }
 
-    private emitEvents(events: GameSocketEvent[]) {
+    private emitEvents(events: GameSocketEvent[], roomId?: string) {
         for (const event of events) {
-            this.broadcaster(event.event, event.data);
+            this.broadcaster(event.event, event.data, roomId);
         }
     }
 
-    private clearCraftingTimer(stackId: string) {
-        const existingTimer = this.craftingTimers.get(stackId);
+    private setRecipeTimer(stack: CardStack, recipe: Recipe, roomId: string | undefined, delay: number) {
+        this.clearCraftingTimer(stack.stackId, roomId);
+
+        const timer = setTimeout(() => {
+            this.completeRecipe(stack.stackId, recipe.id, roomId);
+        }, delay);
+
+        this.craftingTimers.set(this.timerKey(stack.stackId, roomId), timer);
+    }
+
+    private clearCraftingTimer(stackId: string, roomId?: string) {
+        const key = this.timerKey(stackId, roomId);
+        const existingTimer = this.craftingTimers.get(key);
         if (existingTimer) {
             clearTimeout(existingTimer);
-            this.craftingTimers.delete(stackId);
+            this.craftingTimers.delete(key);
         }
+    }
+
+    private timerKey(stackId: string, roomId?: string) {
+        return `${roomId ?? "local"}:${stackId}`;
     }
 
     private errorEvent(code: string, message: string): GameSocketEvent {

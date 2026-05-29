@@ -3,9 +3,10 @@ import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { UsersModule } from 'src/users/users.module';
 import { JwtModule } from '@nestjs/jwt';
-import { ConfigModule, ConfigService } from '@nestjs/config';
+import { ConfigModule } from '@nestjs/config';
 import { JwtStrategy } from './jwt.strategy';
 import { JwtRefreshTokenStrategy } from './jwt-refresh.strategy'; 
+import { RefreshTokenStoreService } from './refresh-token-store.service';
 
 @Module({
     imports: [
@@ -22,7 +23,8 @@ import { JwtRefreshTokenStrategy } from './jwt-refresh.strategy';
     providers: [
         AuthService, 
         JwtStrategy, 
-        JwtRefreshTokenStrategy 
+        JwtRefreshTokenStrategy,
+        RefreshTokenStoreService,
     ],
     exports : [AuthService, JwtStrategy, JwtRefreshTokenStrategy], 
 })
